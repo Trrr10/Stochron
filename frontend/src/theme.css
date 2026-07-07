@@ -1,0 +1,184 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ── THEME TOKENS (v4) ──────────────────────────────────
+   Declaring colors inside @theme registers them as real
+   Tailwind utilities: bg-background, text-foreground,
+   border-border, bg-card, text-muted-foreground, etc.
+   This also enables opacity modifiers like bg-card/50.   */
+@theme {
+  --font-size-base: 16px;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --color-background:         #eaf2fb;
+  --color-background-soft:    #f5f9fd;
+  --color-foreground:         #0f172a;
+  --color-card:                #ffffff;
+  --color-card-foreground:     #0f172a;
+  --color-card-soft:           #f1f6fc;
+  --color-border:               rgba(15,23,42,0.12);
+  --color-input-background:    #f1f5f9;
+  --color-muted:                #eef3f9;
+  --color-muted-foreground:    #475569;
+  --color-primary:              #1e293b;
+  --color-primary-foreground:  #ffffff;
+  --color-accent:               #dbeafe;
+  --color-accent-foreground:   #1e293b;
+  --color-ring:                 #94a3b8;
+  --color-weight-ring:          #2563eb;
+  --color-weight-bg:            #ffffff;
+  --color-doc-card:             #f8fafc;
+  --radius-fi:                  0.625rem;
+
+  /* Chart/signal colors */
+  --color-fi:        #f59e0b;   /* amber — FI line */
+  --color-nifty:     #3b82f6;   /* blue — NIFTY IT line */
+  --color-stable:    #22c55e;
+  --color-watch:     #eab308;
+  --color-alert:     #f97316;
+  --color-critical:  #ef4444;
+}
+
+/* ── DARK MODE ──────────────────────────────────────────
+   v4 has no automatic .dark variant unless you wire it up.
+   Use @custom-variant so `dark:` utilities work off a
+   .dark class on a parent (e.g. <html class="dark">).    */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  --color-background:         #0A0E1A;
+  --color-background-soft:    #0D1221;
+  --color-foreground:         #f1f5f9;
+  --color-card:                #111827;
+  --color-card-foreground:     #f1f5f9;
+  --color-card-soft:           #161f2e;
+  --color-border:               #1E2A3A;
+  --color-input-background:    #0d1424;
+  --color-muted:                #1e293b;
+  --color-muted-foreground:    #b6c2d4;
+  --color-primary:              #f8fafc;
+  --color-primary-foreground:  #0f172a;
+  --color-accent:               #1e2a3a;
+  --color-accent-foreground:   #f1f5f9;
+  --color-ring:                 #334155;
+  --color-weight-ring:          #f59e0b;
+  --color-weight-bg:            #161f2e;
+  --color-doc-card:             #0f1729;
+}
+
+/* ── BASE ───────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--color-border);
+    outline-color: var(--color-ring);
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: var(--font-size-base);
+    font-family: var(--font-sans);
+  }
+
+  body {
+    background-color: var(--color-background);
+    background-image: linear-gradient(180deg, var(--color-background) 0%, var(--color-background-soft) 100%);
+    color: var(--color-foreground);
+    transition: background-color 0.2s ease, color 0.2s ease;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    color: var(--color-foreground);
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  /* Ensure inputs are always readable */
+  input, textarea, select {
+    background-color: var(--color-input-background);
+    color: var(--color-foreground);
+    border-color: var(--color-border);
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: var(--color-muted-foreground);
+  }
+}
+
+/* ── COMPONENT UTILITIES ────────────────────────────────── */
+@layer components {
+  /* Cards */
+  .fi-card {
+    background-color: var(--color-card);
+    color: var(--color-card-foreground);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-fi);
+  }
+
+  /* Glow effects for regime indicators */
+  .glow-stable   { box-shadow: 0 0 12px rgba(34, 197, 94,  0.4); }
+  .glow-watch    { box-shadow: 0 0 12px rgba(234, 179, 8,  0.4); }
+  .glow-alert    { box-shadow: 0 0 12px rgba(249, 115, 22, 0.4); }
+  .glow-critical { box-shadow: 0 0 12px rgba(239, 68,  68, 0.4); }
+
+  /* Hover glow on cards */
+  .hover-glow {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .hover-glow:hover {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+    transform: translateY(-1px);
+  }
+
+  /* Pulse dot */
+  .signal-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.6; transform: scale(1.3); }
+  }
+
+  /* Flow dot — travels along an SVG path toward a target metric */
+  .flow-dot {
+    filter: drop-shadow(0 0 3px currentColor);
+  }
+
+  /* Sidebar nav row — safe in both themes, never goes white-on-white */
+  .nav-row {
+    color: var(--color-foreground);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .nav-row:hover {
+    background-color: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+  .nav-row.is-active {
+    background-color: var(--color-amber-soft, rgba(245,158,11,0.16));
+    color: var(--color-foreground);
+    font-weight: 600;
+  }
+
+  /* Weight circle */
+  .weight-circle {
+    background-color: var(--color-weight-bg);
+    border: 2px solid var(--color-weight-ring);
+    color: var(--color-foreground);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .weight-circle:focus-within {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-weight-ring) 30%, transparent);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar       { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--color-muted); }
+  ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+  .dark ::-webkit-scrollbar-thumb { background: #334155; }
+}

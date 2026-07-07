@@ -1,61 +1,90 @@
 """
-POST /score
+POST /score            → score ONE document against the user's active dictionary
+POST /score/aggregate   → combine already-scored categories into a Final Score
 
-Scores a piece of text against one of the 4 dictionaries.
-Called by the frontend when a user adds a new document to a category.
-
-Request body:
-  { "text": "...", "dictionary": "D1" }
-
-Response:
-  {
-    "fi_score": 0.642,
-    "regime": "Alert",
-    "dictionary_used": "D1",
-    "positive_hits": ["growth", "profit"],
-    "negative_hits": ["decline", "crash", "fall"],
-    "total_words_checked": 5
-  }
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from core.fi_engine import compute_fi_score, get_regime, DICTIONARIES
+from core.supabase import supabase
+from core.auth import get_current_user
+from core.fi_engine import score_document, aggregate_categories
 
 router = APIRouter(prefix="/score", tags=["Scoring"])
 
+CATEGORIES = ["earnings_call", "filings", "regulatory", "news"]
+DEFAULT_WEIGHT = 0.25
 
+
+def _get_active_words(user_id: str | None) -> tuple[set[str], set[str]]:
+    words = supabase.table("db_dictionary").select("id, name, word").execute().data
+    hidden_ids = set()
+    if user_id:
+        overrides = (
+            supabase.table("user_dictionary_overrides")
+            .select("word_id")
+            .eq("user_id", user_id)
+            .eq("hidden", True)
+            .execute()
+            .data
+        )
+        hidden_ids = {row["word_id"] for row in overrides}
+    assurance = {w["word"].lower() for w in words if w["name"] == "assurance" and w["id"] not in hidden_ids}
+    foreboding = {w["word"].lower() for w in words if w["name"] == "foreboding" and w["id"] not in hidden_ids}
+    return assurance, foreboding
+
+# ── Score a single document ───────────────────────────────────
 class ScoreRequest(BaseModel):
-    text: str = Field(..., min_length=1, description="Document text to score")
-    dictionary: str = Field("D1", description="D1 | D2 | D3 | D4")
+    text: str = Field(
+        ...,
+        min_length=1,
+        description="Pasted/uploaded document text"
+    )
+
+    category: str = Field(
+        ...,
+        description="earnings_call | filings | regulatory | news"
+    )
+
+@router.post("")
+def score_text(body: ScoreRequest, user_id: str = Depends(get_current_user)):
+    if body.category not in CATEGORIES:
+        raise HTTPException(400, f"category must be one of {CATEGORIES}")
+    active_assurance, active_foreboding = _get_active_words(user_id)
+    result = score_document(body.text, active_assurance, active_foreboding)
+    result["category"] = body.category
+    return result
+
+# ── Combine categories into a Final Score ─────────────────────
+class CategoryInput(BaseModel):
+    fi_score: float = Field(..., ge=0, le=1)
 
 
-@router.post("", summary="Score text against a dictionary")
-def score_text(body: ScoreRequest):
-    """
-    Runs the dictionary-based FI scoring algorithm on the provided text.
-    Used when a user adds a new document via the frontend Add Document dialog.
+class AggregateRequest(BaseModel):
+    categories: dict[str, CategoryInput] = Field(
+        ...,
+        description="Only include categories that actually have a scored document"
+    )
 
-    The FI score reflects how many negative/foreboding words appear
-    relative to positive/assurance words, weighted by the chosen dictionary.
-    """
-    if body.dictionary not in DICTIONARIES:
-        body.dictionary = "D1"
+@router.post("/aggregate")
+def aggregate(body: AggregateRequest, user_id: str = Depends(get_current_user)):
+    for cat in body.categories:
+        if cat not in CATEGORIES:
+            raise HTTPException(400, f"Unknown category: {cat}")
 
-    text_lower = body.text.lower()
-    d = DICTIONARIES[body.dictionary]
+    weights = {c: DEFAULT_WEIGHT for c in CATEGORIES}
+    rows = (
+        supabase.table("user_category_weights")
+        .select("category, weight")
+        .eq("user_id", user_id)
+        .execute()
+        .data
+    )
+    for r in rows:
+        weights[r["category"]] = float(r["weight"])
 
-    positive_hits = [p for p in d["positive"] if p in text_lower]
-    negative_hits = [n for n in d["negative"] if n in text_lower]
-
-    fi_score = compute_fi_score(body.text, body.dictionary)
-    regime   = get_regime(fi_score)
-
-    return {
-        "fi_score":           fi_score,
-        "regime":             regime,
-        "dictionary_used":    body.dictionary,
-        "positive_hits":      positive_hits,
-        "negative_hits":      negative_hits,
-        "total_words_checked": len(positive_hits) + len(negative_hits),
+    category_scores = {
+        cat: {"fi_score": data.fi_score, "weight": weights[cat]}
+        for cat, data in body.categories.items()
     }
+    return aggregate_categories(category_scores)

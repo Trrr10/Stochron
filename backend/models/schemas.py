@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
-
 # ── Articles ──────────────────────────────────────────────────
 
 class WeightUpdate(BaseModel):
@@ -60,17 +59,79 @@ class WeightUpdateResponse(BaseModel):
     message: str
 
 
-# ── Dictionary ───────────────────────────────────────────────
+# ── Dictionary (word list, unchanged legacy) ───────────────────
 
 class DictionaryWord(BaseModel):
     word: str = Field(..., min_length=1)
 
 
+# ── Dictionary — per-user hide/show (NEW) ──────────────────────
+
+class DictionaryEntry(BaseModel):
+    id: int
+    word: str
+    active: bool  # false = user has hidden this word
+
+
 class DictionaryOut(BaseModel):
-    rootForeboding: list[str]
-    foreboding: list[str]
-    assurance: list[str]
-    geopolitical: list[str]
+    assurance: list[DictionaryEntry]
+    foreboding: list[DictionaryEntry]
+
+
+class HideWordResponse(BaseModel):
+    word_id: int
+    active: bool
+
+
+# ── Category weights (NEW) ─────────────────────────────────────
+
+class WeightsOut(BaseModel):
+    earnings_call: float
+    filings: float
+    regulatory: float
+    news: float
+
+
+class WeightsUpdate(BaseModel):
+    weights: dict[str, float] = Field(
+        ..., description="e.g. {'earnings_call': 0.4, 'filings': 0.2, 'regulatory': 0.2, 'news': 0.2}"
+    )
+
+
+# ── Document scoring (NEW) ──────────────────────────────────────
+
+class ScoreRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+    category: str = Field(..., description="earnings_call | filings | regulatory | news")
+
+
+class ScoreResponse(BaseModel):
+    fi_score: float
+    tfi_score: float
+    regime: str
+    regime_color: str
+    assurance_count: int
+    foreboding_count: int
+    total_word_count: int
+    assurance_hits: list[str]
+    foreboding_hits: list[str]
+    category: str
+
+
+class CategoryInput(BaseModel):
+    fi_score: float = Field(..., ge=0, le=1)
+
+
+class AggregateRequest(BaseModel):
+    categories: dict[str, CategoryInput]
+
+
+class AggregateResponse(BaseModel):
+    final_score: Optional[float]
+    regime: str
+    regime_color: str
+    categories_used: list[str]
+    normalized_weights: dict[str, float]
 
 
 # ── Final Analysis (Page 3) ───────────────────────────────────

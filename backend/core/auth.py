@@ -1,41 +1,59 @@
-"""
-Auth helper — validates Supabase JWT from request headers.
-
-Every protected endpoint calls get_current_user() as a FastAPI dependency.
-If the token is missing or invalid, it raises 401 immediately.
-The user_id returned is the Supabase auth.users UUID —
-used to scope all user_weights queries.
-"""
-
-from fastapi import Header, HTTPException, Depends
+from typing import Optional
+from fastapi import Header, HTTPException
 from core.supabase import supabase
+
+
+def _validate_token(token: str) -> str:
+    """Shared validation logic. Raises 401 on any failure."""
+    try:
+        response = supabase.auth.get_user(token)
+        if not response or not response.user:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        return str(response.user.id)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token validation failed")
 
 
 async def get_current_user(authorization: str = Header(...)) -> str:
     """
-    FastAPI dependency. Extracts and validates the Bearer JWT.
+    STRICT dependency. Use when a route must have a logged-in user.
 
-    Usage in a router:
+    Usage:
         @router.patch("/{id}/weight")
         def update(id: int, user_id: str = Depends(get_current_user)):
             ...
-
-    Returns the user's UUID string (e.g. "550e8400-e29b-41d4-a716-446655440000")
-    Raises 401 if token is missing, expired, or invalid.
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
             detail="Missing or malformed Authorization header. Expected: Bearer <token>"
         )
-
     token = authorization.replace("Bearer ", "").strip()
+    return _validate_token(token)
 
-    try:
-        # Validates the JWT against Supabase and returns user data
-        response = supabase.auth.get_user(token)
-        if not response or not response.user:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-        return str(response.user.id)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Token validation failed")
+
+async def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    """
+    OPTIONAL dependency. Use when a route should work for guests too.
+
+    Usage:
+        @router.get("")
+        def get_dictionary(user_id: str | None = Depends(get_current_user_optional)):
+            if user_id:
+                ...  # personalize
+            else:
+                ...  # default/guest view
+    """
+    if not authorization:
+        return None
+    if not authorization.startswith("Bearer "):
+        # A malformed header was actively sent — still reject, don't silently
+        # treat it as "no auth", or a typo'd token would look like guest mode.
+        raise HTTPException(
+            status_code=401,
+            detail="Malformed Authorization header. Expected: Bearer <token>"
+        )
+    token = authorization.replace("Bearer ", "").strip()
+    return _validate_token(token)

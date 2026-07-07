@@ -1,16 +1,3 @@
-"""
-GET /chart-data
-
-Powers Page 1 — dual line chart.
-
-Auth: optional.
-- If user sends a JWT → chart shows their personalised FI (based on their weights)
-- If no JWT → chart shows global FI from db_fi (all weights = 1.0)
-
-This means the chart works even before a user logs in,
-but updates to their personal view once they do.
-"""
-
 from fastapi import APIRouter, Query, Header
 from typing import Optional
 from core.supabase import supabase

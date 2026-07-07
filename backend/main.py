@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import chart, mindmap, articles, dictionary, analysis
+from routers import chart, mindmap, articles, dictionary, analysis,score_router
 
 app = FastAPI(
     title="Foreboding Index API",
@@ -12,9 +12,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  
-        "http://localhost:3000",   
-        "https://*.vercel.app",    
+        "http://localhost:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -27,6 +25,7 @@ app.include_router(mindmap.router)
 app.include_router(articles.router)
 app.include_router(dictionary.router)
 app.include_router(analysis.router)
+app.include_router(score_router.router)
 
 
 # ── Health check ──────────────────────────────────────────────

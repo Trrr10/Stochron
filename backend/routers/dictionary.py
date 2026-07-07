@@ -1,108 +1,98 @@
 """
-GET    /dictionary          → returns all 4 dictionaries
-POST   /dictionary/{name}   → adds a word to a dictionary
-DELETE /dictionary/{name}/{word} → removes a word
-
-Dictionaries are stored in Supabase table: db_dictionary
-Schema:
-  id       BIGSERIAL PRIMARY KEY
-  name     TEXT NOT NULL   -- 'rootForeboding' | 'foreboding' | 'assurance' | 'geopolitical'
-  word     TEXT NOT NULL
-  UNIQUE(name, word)
-
-NOTE: Run this SQL in Supabase to create the dictionary table:
-
-  CREATE TABLE IF NOT EXISTS db_dictionary (
-    id    BIGSERIAL PRIMARY KEY,
-    name  TEXT NOT NULL,
-    word  TEXT NOT NULL,
-    UNIQUE(name, word)
-  );
-
-  ALTER TABLE db_dictionary ENABLE ROW LEVEL SECURITY;
-
-  CREATE POLICY "Public read dictionary"
-    ON db_dictionary FOR SELECT USING (true);
-
-  CREATE POLICY "Public insert dictionary"
-    ON db_dictionary FOR INSERT WITH CHECK (true);
-
-  CREATE POLICY "Public delete dictionary"
-    ON db_dictionary FOR DELETE USING (true);
-
-  -- Seed default words
-  INSERT INTO db_dictionary (name, word) VALUES
-    ('rootForeboding', 'uncertainty'), ('rootForeboding', 'risk'),
-    ('rootForeboding', 'concern'),     ('rootForeboding', 'doubt'),
-    ('rootForeboding', 'hesitation'),  ('rootForeboding', 'worry'),
-    ('foreboding', 'decline'),   ('foreboding', 'decrease'),
-    ('foreboding', 'fall'),      ('foreboding', 'drop'),
-    ('foreboding', 'negative'),  ('foreboding', 'adverse'),
-    ('foreboding', 'challenge'),
-    ('assurance', 'confident'), ('assurance', 'stable'),
-    ('assurance', 'strong'),    ('assurance', 'positive'),
-    ('assurance', 'growth'),    ('assurance', 'success'),
-    ('geopolitical', 'regulation'), ('geopolitical', 'policy'),
-    ('geopolitical', 'tariff'),     ('geopolitical', 'sanction'),
-    ('geopolitical', 'compliance'), ('geopolitical', 'government')
-  ON CONFLICT DO NOTHING;
+GET  /dictionary                        → all words + which are hidden for this user
+POST /dictionary/{name}                 → add a new global word (unchanged from before)
+PATCH /dictionary/{word_id}/hide        → hide this word for the current user
+PATCH /dictionary/{word_id}/unhide      → restore this word for the current user
+GET  /dictionary/weights                → this user's category weights (defaults to 0.25 each)
+PUT  /dictionary/weights                → update this user's category weights
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from core.supabase import supabase
-from models.schemas import DictionaryWord, DictionaryOut
+from core.auth import get_current_user  # existing JWT dependency
+from core.auth import get_current_user_optional
+
 
 router = APIRouter(prefix="/dictionary", tags=["Dictionary"])
 
-VALID_DICTS = {"rootForeboding", "foreboding", "assurance", "geopolitical"}
+DEFAULT_WEIGHT = 0.25
+CATEGORIES = ["earnings_call", "filings", "regulatory", "news"]
 
 
-@router.get("", response_model=DictionaryOut)
-def get_dictionaries():
-    """Returns all 4 dictionaries as word lists — used by DictionaryEditor on load."""
-    res = supabase.table("db_dictionary") \
-        .select("name, word") \
-        .order("word") \
+# ── Get full dictionary + this user's hidden words ───────────
+@router.get("")
+def get_dictionary(user_id: str | None = Depends(get_current_user_optional)):
+    words = supabase.table("db_dictionary").select("id, name, word").execute().data
+
+    hidden_ids = set()
+    if user_id:
+        overrides = (
+            supabase.table("user_dictionary_overrides")
+            .select("word_id")
+            .eq("user_id", user_id)
+            .eq("hidden", True)
+            .execute()
+            .data
+        )
+        hidden_ids = {row["word_id"] for row in overrides}
+
+    assurance, foreboding = [], []
+    for w in words:
+        entry = {"id": w["id"], "word": w["word"], "active": w["id"] not in hidden_ids}
+        (assurance if w["name"] == "assurance" else foreboding).append(entry)
+
+    return {"assurance": assurance, "foreboding": foreboding}
+
+
+@router.patch("/{word_id}/hide")
+def hide_word(word_id: int, user_id: str = Depends(get_current_user)):
+    supabase.table("user_dictionary_overrides").upsert({
+        "user_id": user_id,
+        "word_id": word_id,
+        "hidden": True,
+    }, on_conflict="user_id,word_id").execute()
+    return {"word_id": word_id, "active": False}
+
+
+@router.patch("/{word_id}/unhide")
+def unhide_word(word_id: int, user_id: str = Depends(get_current_user)):
+    supabase.table("user_dictionary_overrides").delete() \
+        .eq("user_id", user_id).eq("word_id", word_id).execute()
+    return {"word_id": word_id, "active": True}
+
+# ── Request body for updating category weights ────────────────
+class WeightsUpdate(BaseModel):
+    weights: dict[str, float] = Field(
+        ...,
+        description="Category weights for earnings_call, filings, regulatory and news"
+    )
+
+@router.get("/weights")
+def get_weights(user_id: str = Depends(get_current_user)):
+    result = {c: DEFAULT_WEIGHT for c in CATEGORIES}
+    rows = (
+        supabase.table("user_category_weights")
+        .select("category, weight")
+        .eq("user_id", user_id)
         .execute()
-
-    result = {k: [] for k in VALID_DICTS}
-    for row in (res.data or []):
-        if row["name"] in result:
-            result[row["name"]].append(row["word"])
-
-    return DictionaryOut(**result)
+        .data
+    )
+    for r in rows:
+        result[r["category"]] = float(r["weight"])
+    return result
 
 
-@router.post("/{dict_name}", response_model=dict)
-def add_word(dict_name: str, body: DictionaryWord):
-    """Adds a word to a dictionary. Duplicate words are silently ignored."""
-    if dict_name not in VALID_DICTS:
-        raise HTTPException(400, f"Invalid dictionary '{dict_name}'. Must be one of: {VALID_DICTS}")
-
-    word = body.word.strip().lower()
-    if not word:
-        raise HTTPException(400, "Word cannot be empty")
-
-    res = supabase.table("db_dictionary") \
-        .insert({"name": dict_name, "word": word}) \
-        .execute()
-
-    if not res.data:
-        raise HTTPException(500, "Failed to add word")
-
-    return {"added": word, "dictionary": dict_name}
-
-
-@router.delete("/{dict_name}/{word}", response_model=dict)
-def remove_word(dict_name: str, word: str):
-    """Removes a word from a dictionary."""
-    if dict_name not in VALID_DICTS:
-        raise HTTPException(400, f"Invalid dictionary '{dict_name}'")
-
-    res = supabase.table("db_dictionary") \
-        .delete() \
-        .eq("name", dict_name) \
-        .eq("word", word.lower()) \
-        .execute()
-
-    return {"deleted": word, "dictionary": dict_name}
+@router.put("/weights")
+def update_weights(body: WeightsUpdate, user_id: str = Depends(get_current_user)):
+    for category, weight in body.weights.items():
+        if category not in CATEGORIES:
+            raise HTTPException(400, f"Unknown category: {category}")
+        if not (0 <= weight <= 1):
+            raise HTTPException(400, f"Weight for {category} must be between 0 and 1")
+        supabase.table("user_category_weights").upsert({
+            "user_id": user_id,
+            "category": category,
+            "weight": weight,
+        }, on_conflict="user_id,category").execute()
+    return get_weights(user_id)
