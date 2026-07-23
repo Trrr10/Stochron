@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { FileText, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
+import { FileText, TrendingUp, AlertCircle, ArrowRight, LogIn } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
@@ -8,7 +8,19 @@ export default function PlatformOverview() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 relative">
+
+      {/* Sign in (symmetrical with Login's "Back to home") */}
+      <button
+        onClick={() => navigate('/login')}
+        className="absolute top-6 right-6 inline-flex items-center gap-1.5 text-sm text-[--muted-foreground]
+          hover:text-amber-400 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400/50
+          rounded-md px-2 py-1"
+      >
+        <LogIn className="w-4 h-4" />
+        Sign in
+      </button>
+
       <div className="max-w-6xl mx-auto space-y-12">
 
         {/* Header */}
@@ -27,7 +39,7 @@ export default function PlatformOverview() {
           </p>
         </div>
 
-        {/* Main Claim Section — single card, both panels inside it, like the original */}
+        {/* Main Claim Section */}
         <Card className="fi-card border-[--border]">
           <CardHeader className="text-center">
             <CardTitle className="text-3xl text-[--foreground]">
@@ -42,18 +54,18 @@ export default function PlatformOverview() {
             {/* Old Way */}
             <div className="p-6 rounded-lg border-2 border-red-500/25 bg-red-500/[0.06]">
               <h3 className="text-xl font-semibold mb-4 text-red-500 dark:text-red-400 flex items-center gap-2">
-                <AlertCircle className="w-6 h-6" />
+                <AlertCircle className="w-6 h-6" aria-hidden="true" />
                 Traditional Approach: Messy &amp; Time-Consuming
               </h3>
               <div className="flex flex-wrap gap-4 justify-center items-center">
                 <DocumentIcon label="Earnings Call" />
-                <ArrowRight className="w-6 h-6 text-red-400/70" />
+                <ArrowRight className="w-6 h-6 text-red-400/70" aria-hidden="true" />
                 <DocumentIcon label="News" />
-                <ArrowRight className="w-6 h-6 text-red-400/70" />
+                <ArrowRight className="w-6 h-6 text-red-400/70" aria-hidden="true" />
                 <DocumentIcon label="Filings" />
-                <ArrowRight className="w-6 h-6 text-red-400/70" />
+                <ArrowRight className="w-6 h-6 text-red-400/70" aria-hidden="true" />
                 <DocumentIcon label="Reports" />
-                <ArrowRight className="w-6 h-6 text-red-400/70" />
+                <ArrowRight className="w-6 h-6 text-red-400/70" aria-hidden="true" />
                 <div className="px-6 py-4 rounded-lg font-semibold text-red-500 dark:text-red-400 bg-red-500/15 border border-red-500/20">
                   Final Analysis?
                 </div>
@@ -66,14 +78,14 @@ export default function PlatformOverview() {
             {/* New Way */}
             <div className="p-6 rounded-lg border-2 border-emerald-500/25 bg-emerald-500/[0.06]">
               <h3 className="text-xl font-semibold mb-4 text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                <TrendingUp className="w-6 h-6" />
+                <TrendingUp className="w-6 h-6" aria-hidden="true" />
                 Our Approach: Start with Analysis, Dive Deep as Needed
               </h3>
               <div className="flex flex-col items-center gap-4">
                 <div className="px-8 py-6 rounded-lg font-semibold text-xl text-black bg-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.25)]">
                   Final Analysis (FI, TFI, Regime)
                 </div>
-                <ArrowRight className="w-6 h-6 text-emerald-500/70 rotate-90" />
+                <ArrowRight className="w-6 h-6 text-emerald-500/70 rotate-90" aria-hidden="true" />
                 <div className="flex flex-wrap gap-4 justify-center">
                   <DocumentIcon label="Drill into Earnings" small />
                   <DocumentIcon label="Check News" small />
@@ -91,10 +103,11 @@ export default function PlatformOverview() {
                 size="lg"
                 onClick={() => navigate('/network')}
                 className="text-lg px-8 py-6 bg-amber-400 hover:bg-amber-300 text-black
-                  transition-all hover:shadow-[0_0_24px_rgba(245,158,11,0.4)]"
+                  transition-all hover:shadow-[0_0_24px_rgba(245,158,11,0.4)]
+                  focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2"
               >
                 Start Analysis
-                <ArrowRight className="w-5 h-5 ml-2" />
+                <ArrowRight className="w-5 h-5 ml-2" aria-hidden="true" />
               </Button>
             </div>
           </CardContent>
@@ -214,7 +227,7 @@ function DocumentIcon({ label, small }: { label: string; small?: boolean }) {
   return (
     <div className={`flex flex-col items-center gap-1.5 ${small ? 'scale-90' : ''}`}>
       <div className="p-3 rounded-lg fi-card hover-glow border border-[--border] transition-transform hover:-translate-y-0.5">
-        <FileText className="w-7 h-7 text-blue-500 dark:text-blue-400" />
+        <FileText className="w-7 h-7 text-blue-500 dark:text-blue-400" aria-hidden="true" />
       </div>
       <span className="text-xs text-[--muted-foreground] font-medium whitespace-nowrap">{label}</span>
     </div>

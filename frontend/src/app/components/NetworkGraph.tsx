@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Save, BarChart3, Calendar, LogOut, AlertCircle, Loader2 } from 'lucide-react';
-import { motion } from 'motion/react';
 
 import { Button }   from './ui/button';
 import { Card }     from './ui/card';
@@ -57,6 +56,8 @@ const initialCategories: SourceCategoryType[] = [
   { id: '3', name: 'Regulatory Announcements', documents: [], weight: 0.25, fi: 0, tfi: 0, regime: 0, hasRealData: false },
   { id: '4', name: 'News Articles',            documents: [], weight: 0.25, fi: 0, tfi: 0, regime: 0, hasRealData: true  },
 ];
+
+type ConnectorPath = { id: string; d: string; x1: number; y1: number; x2: number; y2: number };
 
 export default function NetworkGraph() {
   const navigate = useNavigate();
@@ -126,6 +127,58 @@ export default function NetworkGraph() {
       });
   
   }, [categories, backendWeights]);
+
+  // --- Connector line geometry -------------------------------------------
+  // Draws one dashed curve from the Aggregated Results node to each
+  // category's weight circle, measured from real DOM positions rather
+  // than hardcoded offsets. The previous version anchored each line at a
+  // fixed "-top-300px" offset inside an `overflow-hidden` parent, which
+  // clipped almost the entire line — only stray fragments of the moving
+  // dot survived, which is what read as "confetti".
+  const graphAreaRef = useRef<HTMLDivElement>(null);
+  const mainNodeRef  = useRef<HTMLDivElement>(null);
+  const categoryRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [connectors, setConnectors] = useState<ConnectorPath[]>([]);
+
+  useLayoutEffect(() => {
+    function recompute() {
+      const container = graphAreaRef.current;
+      const main = mainNodeRef.current;
+      if (!container || !main) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const mainRect = main.getBoundingClientRect();
+      const originX = mainRect.left + mainRect.width / 2 - containerRect.left;
+      const originY = mainRect.bottom - containerRect.top;
+
+      const next: ConnectorPath[] = [];
+      categories.forEach(cat => {
+        const el = categoryRefs.current.get(cat.id);
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        // Anchor to the weight circle (first child, w-16 = 64px) rather
+        // than the row's outer edge, so the line visibly plugs into it.
+        const targetX = r.left - containerRect.left + 32;
+        const targetY = r.top - containerRect.top + 32;
+        const midY = originY + (targetY - originY) * 0.5;
+        next.push({
+          id: cat.id,
+          d: `M ${originX} ${originY} C ${originX} ${midY}, ${targetX} ${midY}, ${targetX} ${targetY}`,
+          x1: originX, y1: originY, x2: targetX, y2: targetY,
+        });
+      });
+      setConnectors(next);
+    }
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    if (graphAreaRef.current) ro.observe(graphAreaRef.current);
+    window.addEventListener('resize', recompute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', recompute);
+    };
+  }, [categories]);
 
 
   const handleAddDocument = async () => {
@@ -261,8 +314,35 @@ export default function NetworkGraph() {
 
           {/* Network Graph */}
           <div className="col-span-7">
-            <div className="fi-card p-6 min-h-[800px] relative overflow-hidden hover-glow">
-              <div className="flex justify-center mb-8">
+            <div ref={graphAreaRef} className="fi-card p-6 min-h-[800px] relative overflow-hidden hover-glow">
+              <style>{`
+                .fi-connector-line {
+                  stroke: var(--border, #ffffff);
+                  stroke-width: 1.75;
+                  stroke-dasharray: 5 7;
+                  fill: none;
+                  animation: fi-connector-flow 1.6s linear infinite;
+                }
+                @keyframes fi-connector-flow {
+                  to { stroke-dashoffset: -24; }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                  .fi-connector-line { animation: none; }
+                }
+              `}</style>
+
+              {/* Connector overlay — sits behind the nodes, measured from real positions */}
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
+                {connectors.map(c => (
+                  <g key={c.id}>
+                    <path d={c.d} className="fi-connector-line" />
+                    <circle cx={c.x1} cy={c.y1} r="3" fill="#f59e0b" />
+                    <circle cx={c.x2} cy={c.y2} r="3" fill="#f59e0b" />
+                  </g>
+                ))}
+              </svg>
+
+              <div ref={mainNodeRef} className="relative flex justify-center mb-8" style={{ zIndex: 1 }}>
                 <NetworkNode
                   title="Aggregated Results"
                   fi={aggregated.fi}
@@ -272,20 +352,15 @@ export default function NetworkGraph() {
                 />
               </div>
 
-              <div className="relative space-y-6">
-                {categories.map((category, index) => (
-                  <div key={category.id} className="relative">
-                    <svg className="absolute -top-[300px] left-1/2 w-1 h-[300px] overflow-visible pointer-events-none">
-                      <line x1="0" y1="0"
-                        x2={`${(index - (categories.length - 1) / 2) * 180}`} y2="300"
-                        stroke="var(--border)" strokeWidth="1.5" strokeDasharray="4,4" />
-                      <motion.circle r="3" fill="#f59e0b"
-                        initial={{ offsetDistance: '0%' }}
-                        animate={{ offsetDistance: '100%' }}
-                        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                        style={{ offsetPath: `path('M 0 0 L ${(index - (categories.length - 1) / 2) * 180} 300')` }}
-                      />
-                    </svg>
+              <div className="relative space-y-6" style={{ zIndex: 1 }}>
+                {categories.map((category) => (
+                  <div
+                    key={category.id}
+                    ref={(el) => {
+                      if (el) categoryRefs.current.set(category.id, el);
+                      else categoryRefs.current.delete(category.id);
+                    }}
+                  >
                     <SourceCategory
                       category={category}
                       onWeightChange={w => handleCategoryWeightChange(category.id, w)}
