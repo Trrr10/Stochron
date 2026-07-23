@@ -1,11 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Save, BarChart3, Calendar, LogOut, AlertCircle, Loader2 } from 'lucide-react';
-
-import { Button }   from './ui/button';
-import { Card }     from './ui/card';
-import { Input }    from './ui/input';
-import { Textarea } from './ui/textarea';
 import { Label }    from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 
@@ -14,7 +9,7 @@ import DictionaryEditor from './DictionaryEditor';
 import NetworkNode      from './NetworkNode';
 import SourceCategory   from './SourceCategory';
 
-import { fetchChartData, scoreText, aggregateScores } from '../../lib/api';
+import { scoreText, aggregateScores } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import { useAuth }  from '../../lib/AuthContext';
 import { useDictionary } from '../../lib/DictionaryContext';

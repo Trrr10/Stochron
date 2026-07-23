@@ -9,7 +9,7 @@ import { fetchAnalysis } from '../../lib/api';
 export default function FinalAnalysis() {
   const navigate = useNavigate();
   const [analysisData, setAnalysisData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAnalysis()
