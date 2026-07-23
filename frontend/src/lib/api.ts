@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 async function authHeader(required = false): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -16,7 +16,7 @@ async function apiFetch(path: string, options: RequestInit = {}, requireAuth = f
     'Content-Type': 'application/json',
     ...(await authHeader(requireAuth)),
   };
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `API error ${res.status}`);
