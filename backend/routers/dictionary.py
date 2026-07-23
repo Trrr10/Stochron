@@ -67,10 +67,13 @@ class WeightsUpdate(BaseModel):
         ...,
         description="Category weights for earnings_call, filings, regulatory and news"
     )
-
+    
 @router.get("/weights")
-def get_weights(user_id: str = Depends(get_current_user)):
+def get_weights(user_id: str | None = Depends(get_current_user_optional)):
     result = {c: DEFAULT_WEIGHT for c in CATEGORIES}
+    if not user_id:
+        return result
+
     rows = (
         supabase.table("user_category_weights")
         .select("category, weight")
