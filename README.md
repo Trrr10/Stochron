@@ -1,4 +1,4 @@
-# Stochron — Foreboding Index (FI) Platform
+# Stochron — Foreboding Index (FI) Platform   Watch live at https://stochron-psi.vercel.app/
 
 A financial sentiment analysis platform that scores news articles, earnings calls, filings, and regulatory disclosures using a transparent, **lexicon-based sentiment engine**, then tracks how that sentiment correlates with real market data over time.
 
